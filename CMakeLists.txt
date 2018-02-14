@@ -147,15 +147,10 @@ FOREACH (F ${PREPROCESSOR_FILES})
    FILE (GENERATE OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/include/msgpack/${F} CONTENT ${CONTENT})
 ENDFOREACH ()
 
-FIND_PACKAGE (GTest)
-FIND_PACKAGE (ZLIB)
-FIND_PACKAGE (Threads)
-IF (GTEST_FOUND AND ZLIB_FOUND AND THREADS_FOUND)
-    OPTION (MSGPACK_BUILD_TESTS "Build msgpack tests." ON)
-ENDIF ()
+OPTION (MSGPACK_BUILD_TESTS "Build msgpack tests." OFF)
 
-OPTION (MSGPACK_ENABLE_CXX "Enable C++ interface." ON)
-OPTION (MSGPACK_ENABLE_SHARED "Build shared libaries in addition to static libraries." ON)
+OPTION (MSGPACK_ENABLE_CXX "Enable C++ interface." OFF)
+OPTION (MSGPACK_ENABLE_SHARED "Build shared libaries in addition to static libraries." OFF)
 
 INCLUDE (CheckCXXSourceCompiles)
 CHECK_CXX_SOURCE_COMPILES ("
@@ -173,12 +168,6 @@ INCLUDE (Files.cmake)
 
 EXECUTE_PROCESS (
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/src/msgpack
-)
-
-CONFIGURE_FILE (
-    msgpack.pc.in
-    msgpack.pc
-    @ONLY
 )
 
 IF (MSGPACK_ENABLE_SHARED)
@@ -203,6 +192,20 @@ ADD_LIBRARY (msgpackc-static STATIC
 )
 
 TARGET_INCLUDE_DIRECTORIES (msgpackc-static
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+ADD_LIBRARY (msgpackc-object OBJECT
+    ${msgpackc_SOURCES}
+    ${msgpackc_HEADERS}
+)
+
+TARGET_INCLUDE_DIRECTORIES (msgpackc-object
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
@@ -297,85 +300,3 @@ IF (NOT MSVC)
     INSTALL (FILES ${CMAKE_CURRENT_BINARY_DIR}/msgpack.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 ENDIF ()
 
-# Doxygen
-FIND_PACKAGE (Doxygen)
-IF (DOXYGEN_FOUND)
-    LIST (APPEND Doxyfile_c_CONTENT
-        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_c
-        COMMAND ${CMAKE_COMMAND} -E echo "FILE_PATTERNS      = *.h" >> ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_c
-        COMMAND ${CMAKE_COMMAND} -E echo "OUTPUT_DIRECTORY   = doc_c" >> ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_c
-        COMMAND ${CMAKE_COMMAND} -E echo "INPUT              = ${CMAKE_CURRENT_SOURCE_DIR}/include" >> ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_c
-        COMMAND ${CMAKE_COMMAND} -E echo "EXTRACT_ALL        = YES" >> ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_c
-        COMMAND ${CMAKE_COMMAND} -E echo "PROJECT_NAME       = \"MessagePack for C\"" >> ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_c
-    )
-    IF (DOXYGEN_DOT_FOUND)
-        LIST (APPEND Doxyfile_c_CONTENT
-            COMMAND ${CMAKE_COMMAND} -E echo "HAVE_DOT       = YES" >> ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_c
-        )
-    ENDIF ()
-    ADD_CUSTOM_TARGET (
-        doxygen_c
-        ${Doxyfile_c_CONTENT}
-        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_c
-        VERBATIM
-    )
-    LIST (APPEND Doxyfile_cpp_CONTENT
-        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_cpp
-        COMMAND ${CMAKE_COMMAND} -E echo "FILE_PATTERNS      = *.hpp" >> ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_cpp
-        COMMAND ${CMAKE_COMMAND} -E echo "OUTPUT_DIRECTORY   = doc_cpp" >> ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_cpp
-        COMMAND ${CMAKE_COMMAND} -E echo "INPUT              = ${CMAKE_CURRENT_SOURCE_DIR}/include" >> ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_cpp
-        COMMAND ${CMAKE_COMMAND} -E echo "EXTRACT_ALL        = YES" >> ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_cpp
-    )
-    IF (DOXYGEN_DOT_FOUND)
-        LIST (APPEND Doxyfile_cpp_CONTENT
-            COMMAND ${CMAKE_COMMAND} -E echo "HAVE_DOT       = YES" >> ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_cpp
-        )
-    ENDIF ()
-    ADD_CUSTOM_TARGET (
-        doxygen_cpp
-        ${Doxyfile_cpp_CONTENT}
-        COMMAND ${CMAKE_COMMAND} -E echo "PROJECT_NAME       = \"MessagePack for C++\"" >> ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_cpp
-        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile_cpp
-        VERBATIM
-    )
-    ADD_CUSTOM_TARGET (
-        doxygen
-        DEPENDS doxygen_c doxygen_cpp
-    )
-ENDIF ()
-
-INCLUDE (CMakePackageConfigHelpers)
-
-SET (CMAKE_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/msgpack")
-
-WRITE_BASIC_PACKAGE_VERSION_FILE (
-    msgpack-config-version.cmake
-    VERSION ${VERSION}
-    COMPATIBILITY SameMajorVersion
-)
-
-IF (NOT CMAKE_VERSION VERSION_LESS 3.0)
-    EXPORT (EXPORT msgpack-targets
-        FILE "${CMAKE_CURRENT_BINARY_DIR}/msgpack-targets.cmake"
-    )
-ENDIF ()
-
-CONFIGURE_PACKAGE_CONFIG_FILE (msgpack-config.cmake.in
-    msgpack-config.cmake
-    INSTALL_DESTINATION "${CMAKE_INSTALL_CMAKEDIR}"
-)
-
-INSTALL (EXPORT msgpack-targets
-    FILE
-        msgpack-targets.cmake
-    DESTINATION
-        "${CMAKE_INSTALL_CMAKEDIR}"
-)
-
-INSTALL (
-    FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/msgpack-config.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/msgpack-config-version.cmake"
-    DESTINATION
-        "${CMAKE_INSTALL_CMAKEDIR}"
-)
